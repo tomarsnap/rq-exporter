@@ -5,11 +5,11 @@ RQ metrics collector.
 
 import logging
 
-from rq import Connection
+from rq import Connection, Worker
 from prometheus_client import Summary
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily
+from prometheus_client.core import GaugeMetricFamily
 
-from .utils import get_workers_stats, get_jobs_by_queue
+from .utils import get_jobs_by_queue, clean_all_registries, count_all_workers
 
 logger = logging.getLogger(__name__)
 
@@ -49,25 +49,15 @@ class RQCollector(object):
 
         with self.summary.time():
             with Connection(self.connection):
-                rq_workers = GaugeMetricFamily('rq_workers', 'RQ workers', labels=['name', 'state', 'queues'])
-                rq_workers_success = CounterMetricFamily('rq_workers_success', 'RQ workers success count', labels=['name', 'queues'])
-                rq_workers_failed = CounterMetricFamily('rq_workers_failed', 'RQ workers fail count', labels=['name', 'queues'])
-                rq_workers_working_time = CounterMetricFamily('rq_workers_working_time', 'RQ workers spent seconds', labels=['name', 'queues'])
-
+                rq_workers = GaugeMetricFamily('rq_workers_count', 'Number of RQ workers')
                 rq_jobs = GaugeMetricFamily('rq_jobs', 'RQ jobs by state', labels=['queue', 'status'])
 
-                workers = get_workers_stats(self.worker_class)
-                for worker in workers:
-                    label_queues = ','.join(worker['queues'])
-                    rq_workers.add_metric([worker['name'], worker['state'], label_queues], 1)
-                    rq_workers_success.add_metric([worker['name'], label_queues], worker['successful_job_count'])
-                    rq_workers_failed.add_metric([worker['name'], label_queues], worker['failed_job_count'])
-                    rq_workers_working_time.add_metric([worker['name'], label_queues], worker['total_working_time'])
+                clean_all_registries(self.queue_class)
+                workers = count_all_workers(self.connection, self.worker_class)
+                rq_workers.add_metric([], workers)
+                # Add same label to started and queued statuses if combining doesn't work in autoscaler
 
                 yield rq_workers
-                yield rq_workers_success
-                yield rq_workers_failed
-                yield rq_workers_working_time
 
                 for (queue_name, jobs) in get_jobs_by_queue(self.queue_class).items():
                     for (status, count) in jobs.items():

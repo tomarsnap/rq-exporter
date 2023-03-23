@@ -23,7 +23,7 @@ import time
 import logging
 import argparse
 
-from prometheus_client import start_wsgi_server
+from prometheus_client import start_wsgi_server, PROCESS_COLLECTOR, PLATFORM_COLLECTOR, GC_COLLECTOR
 from prometheus_client.core import REGISTRY
 from redis.exceptions import RedisError
 from rq.utils import import_attribute
@@ -238,6 +238,9 @@ def main():
 
         # Register the RQ collector
         # The `collect` method is called on registration
+        REGISTRY.unregister(PROCESS_COLLECTOR)
+        REGISTRY.unregister(PLATFORM_COLLECTOR)
+        REGISTRY.unregister(GC_COLLECTOR)
         REGISTRY.register(RQCollector(connection, worker_class, queue_class))
     except (IOError, RedisError) as exc:
         logger.exception('There was an error starting the RQ exporter')

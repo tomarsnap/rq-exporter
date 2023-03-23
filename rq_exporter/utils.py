@@ -7,6 +7,8 @@ from redis import Redis
 from redis.sentinel import Sentinel
 from rq import Queue, Worker
 from rq.job import JobStatus
+from rq.worker_registration import clean_worker_registry
+from rq.registry import clean_registries
 
 
 def get_redis_connection(host='localhost', port='6379', db='0', sentinel=None,
@@ -130,3 +132,21 @@ def get_jobs_by_queue(queue_class=None):
     return {
         q.name: get_queue_jobs(q.name, queue_class) for q in queues
     }
+
+
+def clean_all_registries(queue_class=None):
+    queue_class = queue_class if queue_class is not None else Queue
+
+    queues = queue_class.all()
+    for queue in queues:
+        clean_registries(queue)
+        clean_worker_registry(queue)
+
+
+def count_all_workers(connection, worker_class=None):
+    worker_class = worker_class if worker_class is not None else Worker
+
+    workers = set()
+    for worker in worker_class.all():
+        workers.add(worker)
+    return len(workers)
